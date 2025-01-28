@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Game with Start/Stop</title>
+        <style>
+            #matrix-container {
+                display: grid;
+                gap: 2px;
+            }
+            .cell {
+                width: 50px;
+                height: 50px;
+                border: 1px solid #ccc;
+            }
+
+            button {
+                width: 100px;
+                height: 100px;
+                font-size: 20px;
+            }
+        </style>
+    </head>
+    <body>
+        <button id="start-button">Старт</button>
+        <button id="stop-button">Стоп</button>
+        <div id="matrix-container"></div>
+
+        <script>
+            class Matrix extends Array {
+                constructor(x, y) {
+                    super();
+                    this.x = x;
+                    this.y = y;
+                    this.direction = [
+                        [-1, -1],
+                        [-1, 0],
+                        [-1, 1],
+                        [0, -1],
+                        [0, 1],
+                        [1, -1],
+                        [1, 0],
+                        [1, 1],
+                    ];
+                }
+                create() {
+                    let matrix = [];
+                    this.matrix = matrix;
+                    let n = 1;
+                    for (let i = 0; i < this.x; i++) {
+                        matrix[i] = [];
+                        for (let k = 0; k < this.y; k++) {
+                            matrix[i][k] = {
+                                before: false,
+                                after: false,
+                            };
+                            n++;
+                        }
+                    }
+                }
+                get(x, y) {
+                    return this.matrix[x][y];
+                }
+
+                set(x, y, obj) {
+                    this.matrix[x][y] = obj;
+                }
+                findNeighbours(x, y) {
+                    let neighbors = [];
+                    for (const [w, h] of this.direction) {
+                        const neighborsX = x + w;
+                        const neighborsY = y + h;
+
+                        if (
+                            neighborsX >= 0 &&
+                            neighborsX < this.x &&
+                            neighborsY >= 0 &&
+                            neighborsY < this.y
+                        ) {
+                            neighbors.push(this.matrix[neighborsX][neighborsY]);
+                        }
+                    }
+                    return neighbors;
+                }
+            }
+
+            class Game extends Matrix {
+                constructor(x, y) {
+                    super(x, y);
+                }
+
+                show() {
+                    for (let i = 0; i < this.matrix.length; i++) {
+                        for (let k = 0; k < this.matrix[i].length; k++) {
+                            process.stdout.write(
+                                String(this.matrix[i][k].after)
+                            );
+                        }
+                        console.log();
+                    }
+
+                    console.log('-------------------------------------');
+                    this.clear();
+                }
+
+                findAliveCell(x, y) {
+                    let neighbours = this.findNeighbours(x, y);
+                    let aliveCells = 0;
+                    neighbours.forEach((cell) => {
+                        if (cell.before) {
+                            aliveCells++;
+                        }
+                    });
+                    return aliveCells;
+                }
+                onestep() {
+                    this.stepSurvivalCells();
+                    this.stepBornCells();
+                }
+
+                stepSurvivalCells() {
+                    for (let i = 0; i < this.matrix.length; i++) {
+                        for (let k = 0; k < this.matrix[i].length; k++) {
+                            let aliveCells = this.findAliveCell(i, k);
+                            let currentCell = this.get(i, k);
+                            if (aliveCells > 3 || aliveCells < 2) {
+                                this.matrix[i][k].after = false;
+                            }
+                            if (aliveCells <= 2 && currentCell.before === 0) {
+                                this.matrix[i][k].after = false;
+                            }
+                        }
+                    }
+                }
+                stepBornCells() {
+                    for (let i = 0; i < this.matrix.length; i++) {
+                        for (let k = 0; k < this.matrix[i].length; k++) {
+                            let aliveCells = this.findAliveCell(i, k);
+                            let currentCell = this.get(i, k);
+                            if (aliveCells === 3) {
+                                this.matrix[i][k].after = true;
+                            }
+                            if (
+                                aliveCells === 2 &&
+                                currentCell.before === true
+                            ) {
+                                this.matrix[i][k].after = true;
+                            }
+                        }
+                    }
+                }
+
+                clear() {
+                    for (let i = 0; i < this.matrix.length; i++) {
+                        for (let k = 0; k < this.matrix[i].length; k++) {
+                            if (
+                                this.matrix[i][k].before !==
+                                this.matrix[i][k].after
+                            ) {
+                                this.matrix[i][k].before =
+                                    this.matrix[i][k].after;
+                            }
+                        }
+                    }
+                }
+            }
+
+            let game = new Game(20, 20);
+            game.create();
+
+            const container = document.getElementById('matrix-container');
+            const startButton = document.getElementById('start-button');
+            const stopButton = document.getElementById('stop-button');
+
+            let intervalId = null;
+
+            function renderGameMatrix() {
+                container.innerHTML = '';
+                container.style.gridTemplateColumns = `repeat(${game.matrix[0].length}, 50px)`;
+
+                game.matrix.forEach((row, rowIndex) => {
+                    row.forEach((cell, colIndex) => {
+                        const div = document.createElement('div');
+                        div.className = 'cell';
+                        if (cell.after) {
+                            div.style.backgroundColor = 'black';
+                        } else {
+                            div.style.backgroundColor = 'white';
+                        }
+
+                        div.addEventListener('click', () => {
+                            game.matrix[rowIndex][colIndex].after =
+                                !game.matrix[rowIndex][colIndex].after;
+                            game.matrix[rowIndex][colIndex].before =
+                                game.matrix[rowIndex][colIndex].after;
+                            renderGameMatrix();
+                        });
+
+                        container.appendChild(div);
+                    });
+                });
+            }
+
+            function startUpdating() {
+                if (!intervalId) {
+                    intervalId = setInterval(() => {
+                        game.onestep();
+                        game.clear();
+                        renderGameMatrix();
+                    }, 200);
+                }
+            }
+
+            function stopUpdating() {
+                if (intervalId) {
+                    clearInterval(intervalId);
+                    intervalId = null;
+                }
+            }
+
+            startButton.addEventListener('click', startUpdating);
+            stopButton.addEventListener('click', stopUpdating);
+
+            renderGameMatrix();
+        </script>
+    </body>
+</html>
